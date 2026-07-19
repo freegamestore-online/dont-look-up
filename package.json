@@ -1,14 +1,14 @@
 {
-  "name": "APPNAME",
+  "name": "dont-look-up",
   "private": true,
   "packageManager": "pnpm@10.30.3",
   "engines": { "node": ">=22" },
   "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
   "scripts": {
-    "dev": "pnpm --filter @APPNAME/web dev",
-    "build": "pnpm --filter @APPNAME/web build",
-    "preview": "pnpm --filter @APPNAME/web preview",
-    "typecheck": "pnpm --filter @APPNAME/web exec tsc -b",
-    "test": "pnpm --filter @APPNAME/web test"
+    "dev": "pnpm --filter @dont-look-up/web dev",
+    "build": "pnpm --filter @dont-look-up/web build",
+    "preview": "pnpm --filter @dont-look-up/web preview",
+    "typecheck": "pnpm --filter @dont-look-up/web exec tsc -b",
+    "test": "pnpm --filter @dont-look-up/web test"
   }
 }

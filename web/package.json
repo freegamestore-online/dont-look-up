@@ -1,5 +1,5 @@
 {
-  "name": "@APPNAME/web",
+  "name": "@dont-look-up/web",
   "private": true,
   "type": "module",
   "scripts": {
