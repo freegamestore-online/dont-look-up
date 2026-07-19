@@ -80,9 +80,9 @@ function playWin(ctx: AudioContext) {
   setTimeout(() => playTone(ctx, 1046, 0.4, 0.4), 650);
 }
 
-// Ambient drone — returns handles to modulate pitch/vol in real time
+// Ambient drone with real-time threat modulation
 interface AmbientHandles {
-  setThreat: (t: number) => void; // 0 = calm, 1 = max threat
+  setThreat: (t: number) => void;
   stop: () => void;
 }
 
@@ -108,19 +108,13 @@ function startAmbient(ctx: AudioContext): AmbientHandles {
 
   const iv = setInterval(() => {
     phase += 0.04;
-    // Base tremolo
-    const baseVol1 = 0.03 + Math.sin(phase * 0.7) * 0.012;
-    const baseVol2 = 0.05 + Math.sin(phase * 1.1) * 0.018;
-    // Threat modulates: raises pitch, raises volume, adds tremolo speed
-    const threatFreqShift = currentThreat * 28;   // pitch rises up to +28 Hz
-    const threatVolBoost  = currentThreat * 0.06;  // louder
-    const tremorSpeed     = 1 + currentThreat * 4; // faster tremolo
+    const threatFreqShift = currentThreat * 28;
+    const threatVolBoost  = currentThreat * 0.06;
+    const tremorSpeed     = 1 + currentThreat * 4;
     const tremor = Math.sin(phase * tremorSpeed) * 0.02 * (1 + currentThreat * 2);
-
-    g1.gain.setValueAtTime(Math.max(0.001, baseVol1 + threatVolBoost + tremor), ctx.currentTime);
-    g2.gain.setValueAtTime(Math.max(0.001, baseVol2 + threatVolBoost * 1.2 + tremor), ctx.currentTime);
+    g1.gain.setValueAtTime(Math.max(0.001, 0.03 + Math.sin(phase * 0.7) * 0.012 + threatVolBoost + tremor), ctx.currentTime);
+    g2.gain.setValueAtTime(Math.max(0.001, 0.05 + Math.sin(phase * 1.1) * 0.018 + threatVolBoost * 1.2 + tremor), ctx.currentTime);
     g3.gain.setValueAtTime(Math.max(0.001, 0.04 * (1 + currentThreat * 0.8)), ctx.currentTime);
-
     osc1.frequency.setValueAtTime(55 + threatFreqShift + Math.sin(phase * 0.2) * 2, ctx.currentTime);
     osc2.frequency.setValueAtTime(82.5 + threatFreqShift * 1.5 + Math.sin(phase * 0.3) * 3, ctx.currentTime);
     osc3.frequency.setValueAtTime(41 + threatFreqShift * 0.5, ctx.currentTime);
@@ -129,7 +123,6 @@ function startAmbient(ctx: AudioContext): AmbientHandles {
   function scheduleCreep() {
     const delay = 2500 + Math.random() * 4500;
     setTimeout(() => {
-      if (!iv) return;
       playNoise(ctx, 0.25, 0.10 + currentThreat * 0.15);
       playTone(ctx, 80 + Math.random() * 100 + currentThreat * 60, 0.6, 0.10 + currentThreat * 0.1, "sawtooth");
       scheduleCreep();
@@ -146,7 +139,7 @@ function startAmbient(ctx: AudioContext): AmbientHandles {
   };
 }
 
-// ─── Static overlay ───────────────────────────────────────────────────────────
+// ─── Static / film-grain overlay ──────────────────────────────────────────────
 interface StaticFx {
   draw: (intensity: number) => void;
   destroy: () => void;
@@ -155,20 +148,16 @@ interface StaticFx {
 function makeStaticOverlay(parent: HTMLElement): StaticFx {
   const sc = document.createElement("canvas");
   sc.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen;opacity:0.05;";
-  // Higher resolution for more visible jitter at high intensity
   sc.width = 160; sc.height = 120;
   parent.style.position = "relative";
   parent.appendChild(sc);
   const ctx2 = sc.getContext("2d")!;
 
-  let lastIntensity = 0;
   return {
     draw(intensity: number) {
-      lastIntensity = intensity;
       const w = sc.width, h = sc.height;
       const img = ctx2.createImageData(w, h);
       const d = img.data;
-      // At high intensity, cluster pixels (pixelation effect)
       const blockSize = intensity > 0.7 ? Math.floor(1 + intensity * 5) : 1;
       for (let y = 0; y < h; y += blockSize) {
         for (let x = 0; x < w; x += blockSize) {
@@ -183,9 +172,7 @@ function makeStaticOverlay(parent: HTMLElement): StaticFx {
         }
       }
       ctx2.putImageData(img, 0, 0);
-      // Scale opacity with intensity — clamp to visible range
       sc.style.opacity = String(Math.min(0.25, 0.03 + intensity * 0.22));
-      // At very high intensity, jitter the canvas position
       if (intensity > 0.6) {
         const jx = (Math.random() - 0.5) * intensity * 6;
         const jy = (Math.random() - 0.5) * intensity * 6;
@@ -195,7 +182,6 @@ function makeStaticOverlay(parent: HTMLElement): StaticFx {
       }
     },
     destroy() {
-      void lastIntensity; // suppress unused warning
       if (sc.parentElement) sc.parentElement.removeChild(sc);
     },
   };
@@ -213,17 +199,14 @@ function makeJumpscareOverlay(parent: HTMLElement): JumpscareOverlay {
     "position:absolute;top:0;left:0;width:100%;height:100%;",
     "display:flex;flex-direction:column;align-items:center;justify-content:center;",
     "background:#000;pointer-events:none;z-index:200;opacity:0;",
-    "font-family:monospace;color:#fff;text-align:center;transition:none;",
+    "font-family:monospace;color:#fff;text-align:center;",
   ].join("");
-
   div.innerHTML = `
     <div style="font-size:clamp(36px,10vw,80px);line-height:1;color:#cc0000;letter-spacing:8px;">◉ ◉</div>
     <div style="font-size:clamp(22px,6vw,48px);letter-spacing:6px;color:#880000;margin:6px 0;">⌇⌇⌇⌇⌇⌇⌇⌇</div>
     <div style="font-size:clamp(20px,5vw,38px);color:#ff2222;margin-top:18px;
                 text-shadow:0 0 30px #f00,0 0 60px #900;">IT SAW YOU</div>
-    <div style="font-size:clamp(12px,3vw,20px);color:#999;margin-top:14px;letter-spacing:2px;">
-      you looked up
-    </div>
+    <div style="font-size:clamp(12px,3vw,20px);color:#999;margin-top:14px;letter-spacing:2px;">you looked up</div>
   `;
   parent.appendChild(div);
 
@@ -234,7 +217,6 @@ function makeJumpscareOverlay(parent: HTMLElement): JumpscareOverlay {
       const step = () => {
         t += 0.016;
         if (t < 0.07) {
-          // Flash red
           const r = Math.floor(120 + Math.random() * 135);
           div.style.background = `rgb(${r},0,0)`;
           div.style.opacity = "1";
@@ -244,7 +226,6 @@ function makeJumpscareOverlay(parent: HTMLElement): JumpscareOverlay {
           div.style.filter = "none";
           div.style.opacity = "1";
         } else if (t < 2.6) {
-          // Subtle flicker
           if (Math.random() < 0.04) {
             div.style.filter = `blur(${Math.random() * 8}px) brightness(${0.6 + Math.random() * 0.8})`;
           } else {
@@ -267,22 +248,17 @@ function makeJumpscareOverlay(parent: HTMLElement): JumpscareOverlay {
   };
 }
 
-// ─── Dust mote particle system ────────────────────────────────────────────────
-// Rendered on a separate 2D canvas so they don't interact with KAPLAY layers.
+// ─── Dust mote particles ──────────────────────────────────────────────────────
 interface DustFx {
   update: (playerX: number, playerY: number, camScale: number, camX: number, camY: number) => void;
   destroy: () => void;
 }
 
 interface Mote {
-  wx: number;   // world-space X
-  wy: number;   // world-space Y
-  vx: number;   // drift velocity X
-  vy: number;   // drift velocity Y (negative = upward)
-  r: number;    // radius
-  alpha: number;
-  life: number; // 0..1
-  maxLife: number;
+  wx: number; wy: number;
+  vx: number; vy: number;
+  r: number; alpha: number;
+  life: number; maxLife: number;
 }
 
 function makeDustFx(parent: HTMLElement): DustFx {
@@ -291,19 +267,18 @@ function makeDustFx(parent: HTMLElement): DustFx {
   dc.width = VW; dc.height = VH;
   parent.appendChild(dc);
   const ctx2 = dc.getContext("2d")!;
-
   const motes: Mote[] = [];
   const MAX_MOTES = 28;
+  let spawnTimer = 0;
 
   function spawnMote(px: number, py: number) {
-    // Spawn in a ring around the player (in world coords)
     const angle = Math.random() * Math.PI * 2;
     const dist = 30 + Math.random() * 80;
     motes.push({
       wx: px + Math.cos(angle) * dist,
       wy: py + Math.sin(angle) * dist,
       vx: (Math.random() - 0.5) * 8,
-      vy: -(4 + Math.random() * 12), // always drift upward
+      vy: -(4 + Math.random() * 12),
       r: 0.8 + Math.random() * 1.6,
       alpha: 0.1 + Math.random() * 0.25,
       life: 0,
@@ -311,46 +286,27 @@ function makeDustFx(parent: HTMLElement): DustFx {
     });
   }
 
-  let spawnTimer = 0;
-
   return {
-    update(playerX: number, playerY: number, camScale: number, camX: number, camY: number) {
-      // Spawn new motes
+    update(playerX, playerY, camScale, camX, camY) {
       spawnTimer += 0.016;
       if (spawnTimer > 0.12 && motes.length < MAX_MOTES) {
         spawnMote(playerX, playerY);
         spawnTimer = 0;
       }
-
       ctx2.clearRect(0, 0, VW, VH);
-
-      // World-to-screen transform matching KAPLAY letterbox cam
-      // Screen center = camX, camY in world; scale = camScale
-      const screenCX = VW / 2;
-      const screenCY = VH / 2;
-
+      const screenCX = VW / 2, screenCY = VH / 2;
       for (let i = motes.length - 1; i >= 0; i--) {
         const m = motes[i]!;
         m.life += 0.016;
         m.wx += m.vx * 0.016;
         m.wy += m.vy * 0.016;
-        // Slow down over time
-        m.vx *= 0.995;
-        m.vy *= 0.998;
-
+        m.vx *= 0.995; m.vy *= 0.998;
         if (m.life >= m.maxLife) { motes.splice(i, 1); continue; }
-
-        // Fade in/out
         const t = m.life / m.maxLife;
         const fade = t < 0.2 ? t / 0.2 : t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
-
-        // World → screen
         const sx = screenCX + (m.wx - camX) * camScale;
         const sy = screenCY + (m.wy - camY) * camScale;
-
-        // Only draw if on screen
         if (sx < -10 || sx > VW + 10 || sy < -10 || sy > VH + 10) continue;
-
         ctx2.beginPath();
         ctx2.arc(sx, sy, m.r * camScale, 0, Math.PI * 2);
         ctx2.fillStyle = `rgba(180,160,120,${m.alpha * fade})`;
@@ -394,43 +350,34 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   k.scene("menu", () => {
     onScore(0);
     k.add([k.rect(VW, VH), k.color(0, 0, 0), k.pos(0, 0)]);
-
     k.add([
       k.text("DON'T", { size: 54, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 - 115),
-      k.color(180, 20, 20),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 - 115), k.color(180, 20, 20),
     ]);
     k.add([
       k.text("LOOK UP", { size: 54, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 - 58),
-      k.color(220, 30, 30),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 - 58), k.color(220, 30, 30),
     ]);
     k.add([
       k.text("◉", { size: 38, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 + 5),
-      k.color(100, 0, 0),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 + 5), k.color(100, 0, 0),
     ]);
     k.add([
       k.text("Find the key. Reach the exit.\nKeep your eyes on the FLOOR.", {
         size: 12, font: "monospace", align: "center",
       }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 + 65),
-      k.color(150, 150, 150),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 + 65), k.color(150, 150, 150),
     ]);
     k.add([
-      k.text("WASD / Arrows to move\n⚠  SPACE = instant death  ⚠\n(Mobile: tap BOTTOM half to move)", {
+      k.text("WASD / Arrows to move\n⚠  SPACE = instant death  ⚠", {
         size: 11, font: "monospace", align: "center",
       }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 + 125),
-      k.color(110, 70, 70),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 + 125), k.color(110, 70, 70),
     ]);
-
     const startTxt = k.add([
       k.text("[ CLICK or ENTER to begin ]", { size: 13, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 + 185),
-      k.color(200, 200, 200),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 + 185), k.color(200, 200, 200),
     ]);
-
     let pulse = 0;
     k.onUpdate(() => {
       pulse += k.dt() * 2.5;
@@ -438,7 +385,6 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       startTxt.color = k.rgb(v, v, v);
       staticFx.draw(0.25 + Math.sin(pulse * 0.8) * 0.15);
     });
-
     k.onMousePress(() => { ensureAudio(); k.go("play"); });
     k.onKeyPress("enter", () => { ensureAudio(); k.go("play"); });
     k.onKeyPress("space", () => { ensureAudio(); k.go("play"); });
@@ -452,8 +398,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     const startTime = Date.now();
     let hasKey = false;
     let isDead = false;
-    let threatLevel = 0;    // 0..1 — drives audio + visual
-    let breathPhase = 0;    // for darkness ring breathing animation
+    let threatLevel = 0;
+    let breathPhase = 0;
     let warnPulse = 0;
 
     // ── Parse map ─────────────────────────────────────────────────────────
@@ -467,11 +413,68 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       for (let col = 0; col < COLS; col++) {
         const cell = MAP[row]![col]!;
         const wx = col * TILE, wy = row * TILE;
+
         if (cell === 1) {
+          // ── WALL: clearly visible stone-gray with bright top/left highlight ──
           wallRects.push({ x: wx, y: wy, w: TILE, h: TILE });
-          k.add([k.rect(TILE, TILE), k.color(18, 18, 22), k.pos(wx, wy), k.area(), "wall"]);
+
+          // Main wall body — medium-dark gray, clearly distinct from floor
+          k.add([
+            k.rect(TILE, TILE),
+            k.color(72, 68, 78),   // visible stone gray
+            k.pos(wx, wy),
+            k.area(),
+            "wall",
+          ]);
+          // Top-left bevel highlight (lighter edge)
+          k.add([
+            k.rect(TILE, 2),
+            k.color(110, 105, 120),
+            k.pos(wx, wy),
+          ]);
+          k.add([
+            k.rect(2, TILE),
+            k.color(100, 95, 110),
+            k.pos(wx, wy),
+          ]);
+          // Bottom-right shadow edge (darker)
+          k.add([
+            k.rect(TILE, 2),
+            k.color(40, 37, 44),
+            k.pos(wx, wy + TILE - 2),
+          ]);
+          k.add([
+            k.rect(2, TILE),
+            k.color(40, 37, 44),
+            k.pos(wx + TILE - 2, wy),
+          ]);
+
         } else {
-          k.add([k.rect(TILE - 1, TILE - 1), k.color(10, 10, 14), k.pos(wx + 0.5, wy + 0.5)]);
+          // ── FLOOR: dark but clearly different from walls ──
+          // Base floor — charcoal with slight blue tint
+          k.add([
+            k.rect(TILE, TILE),
+            k.color(28, 26, 34),
+            k.pos(wx, wy),
+          ]);
+          // Inner floor tile inset (1px gap around edge) — slightly lighter
+          k.add([
+            k.rect(TILE - 4, TILE - 4),
+            k.color(34, 32, 42),
+            k.pos(wx + 2, wy + 2),
+          ]);
+          // Subtle grout lines at tile edges (dark border)
+          k.add([
+            k.rect(TILE, 1),
+            k.color(18, 16, 24),
+            k.pos(wx, wy),
+          ]);
+          k.add([
+            k.rect(1, TILE),
+            k.color(18, 16, 24),
+            k.pos(wx, wy),
+          ]);
+
           if (cell === 2) { playerStartX = wx + TILE / 2; playerStartY = wy + TILE / 2; }
           else if (cell === 3) { keyX = wx + TILE / 2; keyY = wy + TILE / 2; }
           else if (cell === 4) { exitX = wx + TILE / 2; exitY = wy + TILE / 2; }
@@ -482,23 +485,23 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
     // ── Shadow zone floor marks ────────────────────────────────────────────
     for (const sz of shadowZones) {
-      k.add([k.circle(22), k.color(35, 0, 0), k.anchor("center"), k.pos(sz.x, sz.y)]);
+      k.add([k.circle(22), k.color(50, 0, 0), k.anchor("center"), k.pos(sz.x, sz.y)]);
       for (let d = 0; d < 5; d++) {
         const a = (d / 5) * Math.PI * 2;
-        k.add([k.circle(2 + Math.random() * 2), k.color(55, 0, 0), k.anchor("center"),
+        k.add([k.circle(2 + Math.random() * 2), k.color(80, 0, 0), k.anchor("center"),
           k.pos(sz.x + Math.cos(a) * 14, sz.y + Math.sin(a) * 14)]);
       }
       k.add([k.text("▲", { size: 7, font: "monospace" }), k.anchor("center"),
-        k.pos(sz.x, sz.y - 20), k.color(70, 0, 0)]);
+        k.pos(sz.x, sz.y - 20), k.color(100, 0, 0)]);
     }
 
     // ── Exit door ─────────────────────────────────────────────────────────
     const exitObj = k.add([
-      k.rect(26, 30), k.color(25, 25, 100), k.anchor("center"),
+      k.rect(26, 30), k.color(30, 30, 140), k.anchor("center"),
       k.pos(exitX, exitY), k.area(), "exit",
     ]);
     k.add([k.text("EXIT", { size: 6, font: "monospace" }), k.anchor("center"),
-      k.pos(exitX, exitY - 22), k.color(60, 60, 200)]);
+      k.pos(exitX, exitY - 22), k.color(80, 80, 255)]);
 
     // ── Key ───────────────────────────────────────────────────────────────
     const keyObj = k.add([
@@ -508,7 +511,7 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
     // ── Player ────────────────────────────────────────────────────────────
     const player = k.add([
-      k.circle(8), k.color(210, 210, 210), k.anchor("center"),
+      k.circle(8), k.color(220, 220, 220), k.anchor("center"),
       k.pos(playerStartX, playerStartY), k.area(), "player",
     ]);
 
@@ -518,25 +521,37 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     k.camPos(player.pos);
 
     // ── Darkness overlay ──────────────────────────────────────────────────
-    // Big black rect follows player — creates pitch-darkness illusion.
+    // Reduced opacity so walls/floor are visible in flashlight cone
     const darkness = k.add([
       k.rect(VW * 5, VH * 5), k.color(0, 0, 0),
       k.anchor("center"), k.pos(player.pos.x, player.pos.y),
-      k.opacity(0.93),
+      k.opacity(0.88),
     ]);
 
-    // Flashlight glow rings — breathing scale applied each frame
+    // ── Flashlight rings — larger and brighter so maze is readable ────────
+    // Inner bright core
     const fl1 = k.add([
-      k.circle(60), k.color(255, 235, 180), k.anchor("center"),
-      k.pos(player.pos.x, player.pos.y), k.opacity(0.22),
+      k.circle(75),
+      k.color(255, 240, 200),
+      k.anchor("center"),
+      k.pos(player.pos.x, player.pos.y),
+      k.opacity(0.30),
     ]);
+    // Mid glow
     const fl2 = k.add([
-      k.circle(100), k.color(255, 235, 180), k.anchor("center"),
-      k.pos(player.pos.x, player.pos.y), k.opacity(0.08),
+      k.circle(120),
+      k.color(255, 230, 180),
+      k.anchor("center"),
+      k.pos(player.pos.x, player.pos.y),
+      k.opacity(0.13),
     ]);
+    // Outer ambient haze
     const fl3 = k.add([
-      k.circle(145), k.color(200, 200, 255), k.anchor("center"),
-      k.pos(player.pos.x, player.pos.y), k.opacity(0.03),
+      k.circle(170),
+      k.color(200, 210, 255),
+      k.anchor("center"),
+      k.pos(player.pos.x, player.pos.y),
+      k.opacity(0.05),
     ]);
 
     // Monster glow near shadow zones
@@ -545,33 +560,26 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       k.pos(-1000, -1000), k.opacity(0),
     ]);
 
-    // ── HUD — glowing terminal style ──────────────────────────────────────
-    // Key status — amber glow
+    // ── HUD ───────────────────────────────────────────────────────────────
     const hudKey = k.add([
       k.text("[ find the KEY ]", { size: 10, font: "monospace" }),
       k.anchor("topleft"), k.pos(10, 10),
-      k.color(200, 170, 40), k.fixed(),
+      k.color(210, 175, 45), k.fixed(),
     ]);
-
-    // Warning — red center
     const hudWarn = k.add([
       k.text("", { size: 12, font: "monospace" }),
       k.anchor("top"), k.pos(VW / 2, 10),
       k.color(220, 30, 30), k.fixed(),
     ]);
-
-    // Timer — green terminal right
     const hudTimer = k.add([
       k.text("0.0s", { size: 10, font: "monospace" }),
       k.anchor("topright"), k.pos(VW - 10, 10),
       k.color(60, 200, 60), k.fixed(),
     ]);
-
-    // Mobile hint — very faint at bottom
     k.add([
-      k.text("↑ top half = LOOK UP (death)  |  bottom half = move →", { size: 7, font: "monospace" }),
+      k.text("↑ top half = LOOK UP (death)  |  WASD / arrows to move", { size: 7, font: "monospace" }),
       k.anchor("botleft"), k.pos(10, VH - 8),
-      k.color(50, 50, 50), k.fixed(),
+      k.color(55, 55, 55), k.fixed(),
     ]);
 
     // ── Wall collision ─────────────────────────────────────────────────────
@@ -613,61 +621,15 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     // ── Touch: strict 50/50 vertical split ───────────────────────────────
     k.onMousePress(() => {
       const mp = k.mousePos();
-      // Top half of virtual screen = look up = instant death
-      if (mp.y < VH * 0.5 && !isDead) {
-        triggerDeath();
-      }
+      if (mp.y < VH * 0.5 && !isDead) triggerDeath();
     });
-
-    // Mobile joystick: dragging in bottom half moves player
-    let touchMoveDir = { x: 0, y: 0 };
-    let touchActive = false;
-    let touchStartY = 0;
-
-    k.onMouseMove((mp) => {
-      // Only track as movement if touch started in bottom half
-      if (touchActive) {
-        const dx = mp.x - VW / 2;
-        const dy = mp.y - touchStartY;
-        const len = Math.hypot(dx, dy);
-        if (len > 8) {
-          touchMoveDir = { x: dx / len, y: dy / len };
-        } else {
-          touchMoveDir = { x: 0, y: 0 };
-        }
-      }
-    });
-
-    // Track touch start position
-    canvas.addEventListener("touchstart", (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const touch = e.touches[0];
-      if (!touch) return;
-      // Convert to virtual coords
-      const scaleX = VW / rect.width;
-      const scaleY = VH / rect.height;
-      const vy = (touch.clientY - rect.top) * scaleY;
-      if (vy >= VH * 0.5) {
-        touchActive = true;
-        touchStartY = vy;
-      } else {
-        // Top half touch = death
-        if (!isDead) triggerDeath();
-      }
-    }, { passive: true });
-
-    canvas.addEventListener("touchend", () => {
-      touchActive = false;
-      touchMoveDir = { x: 0, y: 0 };
-    }, { passive: true });
 
     // ── Main update ───────────────────────────────────────────────────────
-    const SPEED = 130; // snappy but deliberate
+    const SPEED = 130;
 
     k.onUpdate(() => {
       if (isDead) return;
 
-      // Timer
       const elapsed = (Date.now() - startTime) / 1000;
       hudTimer.text = `${elapsed.toFixed(1)}s`;
 
@@ -681,19 +643,12 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
         );
       }
 
-      // ── Movement ──────────────────────────────────────────────────────
+      // Movement
       let dx = 0, dy = 0;
       if (k.isKeyDown("left")  || k.isKeyDown("a")) dx -= 1;
       if (k.isKeyDown("right") || k.isKeyDown("d")) dx += 1;
       if (k.isKeyDown("up")    || k.isKeyDown("w")) dy -= 1;
       if (k.isKeyDown("down")  || k.isKeyDown("s")) dy += 1;
-
-      // Blend in touch dir
-      if (touchActive) {
-        dx += touchMoveDir.x;
-        dy += touchMoveDir.y;
-      }
-
       if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
 
       const nx = player.pos.x + dx * SPEED * k.dt();
@@ -701,26 +656,21 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       if (!collides(nx, player.pos.y)) player.pos.x = nx;
       if (!collides(player.pos.x, ny)) player.pos.y = ny;
 
-      // ── Camera + flashlight follow ─────────────────────────────────────
+      // Camera + overlay follow
       k.camPos(player.pos);
       darkness.pos.x = player.pos.x; darkness.pos.y = player.pos.y;
       fl1.pos.x = player.pos.x; fl1.pos.y = player.pos.y;
       fl2.pos.x = player.pos.x; fl2.pos.y = player.pos.y;
       fl3.pos.x = player.pos.x; fl3.pos.y = player.pos.y;
 
-      // ── Breathing / ripple animation on flashlight rings ───────────────
-      breathPhase += k.dt() * (1.2 + threatLevel * 2.5);
-      const breathScale = 1 + Math.sin(breathPhase) * (0.04 + threatLevel * 0.10);
-      // KAPLAY circles use radius — scale by adjusting opacity to simulate pulse
-      // (KAPLAY doesn't expose scale on individual objects without transform component,
-      //  so we modulate opacity to create a "breathing" shimmer effect)
-      fl1.opacity = (0.22 + Math.sin(breathPhase) * 0.04) * (1 - threatLevel * 0.15);
-      fl2.opacity = (0.08 + Math.sin(breathPhase * 0.8) * 0.02) * (1 - threatLevel * 0.1);
-      fl3.opacity = 0.03 + Math.sin(breathPhase * 0.6) * 0.01;
-      // Modulate darkness opacity slightly for "breathing" room feel
-      darkness.opacity = 0.93 - Math.sin(breathPhase * 0.5) * 0.015 * breathScale;
+      // ── Breathing animation on flashlight rings ────────────────────────
+      breathPhase += k.dt() * 1.8;
+      const breathScale = 1 + Math.sin(breathPhase) * 0.04 + threatLevel * Math.sin(breathPhase * 3) * 0.06;
+      fl1.scale = k.vec2(breathScale);
+      fl2.scale = k.vec2(breathScale * 0.97 + Math.sin(breathPhase * 1.3) * 0.03);
+      fl3.scale = k.vec2(breathScale * 0.94 + Math.sin(breathPhase * 0.7) * 0.04);
 
-      // ── Shadow zone proximity ──────────────────────────────────────────
+      // ── Shadow zone threat check ───────────────────────────────────────
       let minDist = 9999;
       let nearestSz = shadowZones[0];
       for (const sz of shadowZones) {
@@ -731,57 +681,45 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
       const TRIGGER_DIST = 18;
       const WARN_DIST    = 70;
 
-      if (minDist < TRIGGER_DIST) {
+      if (minDist < TRIGGER_DIST && !isDead) {
         triggerDeath();
         return;
       }
 
       if (minDist < WARN_DIST && nearestSz) {
-        warnPulse += k.dt() * (5 + threatLevel * 8);
-        threatLevel = Math.min(1, 1 - minDist / WARN_DIST);
-
+        warnPulse += k.dt() * 6;
+        const t = 1 - minDist / WARN_DIST;
+        threatLevel = t;
         monsterGlow.pos.x = nearestSz.x;
         monsterGlow.pos.y = nearestSz.y;
-        monsterGlow.opacity = threatLevel * 0.75;
-
-        // Warn text
-        hudWarn.text = minDist < 38 ? "⚠  DON'T LOOK UP  ⚠" : "something is above you...";
-        hudWarn.color = k.rgb(
-          180 + Math.floor(Math.sin(warnPulse) * 75),
-          20,
-          20,
-        );
-
-        // Flashlight flicker at high threat
-        if (threatLevel > 0.5 && Math.random() < 0.08) {
-          fl1.opacity *= 0.3 + Math.random() * 0.4;
-        }
+        monsterGlow.opacity = t * 0.75;
+        const staticLevel = 0.25 + t * 0.95;
+        hudWarn.text = minDist < 38 ? "⚠ DON'T LOOK UP ⚠" : "something is above you...";
+        hudWarn.color = k.rgb(200 + Math.floor(Math.sin(warnPulse) * 55), 20, 20);
+        // Flashlight flickers near threat
+        fl1.opacity = 0.30 - t * 0.08 + Math.sin(warnPulse) * 0.04;
+        if (ambient) ambient.setThreat(t);
+        staticFx.draw(staticLevel);
       } else {
-        threatLevel = Math.max(0, threatLevel - k.dt() * 0.8);
         warnPulse = 0;
+        threatLevel = Math.max(0, threatLevel - k.dt() * 2);
         monsterGlow.opacity = 0;
         hudWarn.text = "";
+        fl1.opacity = 0.30;
+        if (ambient) ambient.setThreat(0);
+        staticFx.draw(0.2);
       }
 
-      // Update ambient audio threat
-      if (ambient) ambient.setThreat(threatLevel);
-
-      // Static intensity: base + threat boost + high-freq jitter near zones
-      const staticInt = 0.22 + threatLevel * 1.1;
-      staticFx.draw(staticInt);
-
-      // Dust motes — pass camera info for world→screen projection
-      dustFx.update(player.pos.x, player.pos.y, CAM_SCALE, player.pos.x, player.pos.y);
+      // Dust motes
+      dustFx.update(player.pos.x, player.pos.y, CAM_SCALE, k.camPos().x, k.camPos().y);
     });
 
-    // ── Jumpscare + death ─────────────────────────────────────────────────
+    // ── Death / Jumpscare ─────────────────────────────────────────────────
     function triggerDeath() {
-      if (isDead) return;
       isDead = true;
       if (audioCtx) playJumpscare(audioCtx);
-      if (ambient) ambient.setThreat(1);
       staticFx.draw(3);
-      jsFx.trigger(() => k.go("over"));
+      jsFx.trigger(() => { k.go("over"); });
     }
   });
 
@@ -792,38 +730,31 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     const isNew = score > prev;
     if (isNew) localStorage.setItem("dontlookup_best", String(score));
     onScore(score);
-    if (ambient) ambient.setThreat(0);
 
     k.add([k.rect(VW, VH), k.color(0, 0, 0), k.pos(0, 0)]);
-
     k.add([
       k.text("YOU ESCAPED", { size: 38, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 - 105),
-      k.color(60, 220, 60),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 - 105), k.color(60, 220, 60),
     ]);
     k.add([
       k.text(`Time: ${elapsed.toFixed(1)}s`, { size: 17, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 - 48),
-      k.color(160, 160, 160),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 - 45), k.color(180, 180, 180),
     ]);
     k.add([
-      k.text(`Score: ${score}`, { size: 28, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 + 8),
-      k.color(255, 210, 0),
+      k.text(`Score: ${score}`, { size: 26, font: "monospace" }),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 + 10), k.color(255, 210, 0),
     ]);
     k.add([
       k.text(isNew ? "★  NEW BEST  ★" : `Best: ${prev}`, { size: 15, font: "monospace" }),
       k.anchor("center"), k.pos(VW / 2, VH / 2 + 55),
-      k.color(isNew ? 255 : 120, isNew ? 175 : 120, 0),
+      k.color(isNew ? 255 : 120, isNew ? 180 : 120, 0),
     ]);
     k.add([
       k.text("[ click / ENTER to play again ]", { size: 13, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 + 130),
-      k.color(140, 140, 140),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 + 130), k.color(160, 160, 160),
     ]);
-
     let p = 0;
-    k.onUpdate(() => { p += k.dt(); staticFx.draw(0.12 + Math.sin(p * 2) * 0.06); });
+    k.onUpdate(() => { p += k.dt(); staticFx.draw(0.15 + Math.sin(p * 2) * 0.08); });
     k.onMousePress(() => k.go("play"));
     k.onKeyPress("enter", () => k.go("play"));
   });
@@ -831,30 +762,23 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
   // ── GAME OVER ─────────────────────────────────────────────────────────────
   k.scene("over", () => {
     onScore(0);
-    if (ambient) ambient.setThreat(0);
-
     k.add([k.rect(VW, VH), k.color(0, 0, 0), k.pos(0, 0)]);
-
     k.add([
-      k.text("IT GOT YOU", { size: 42, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 - 90),
-      k.color(200, 20, 20),
+      k.text("IT GOT YOU", { size: 40, font: "monospace" }),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 - 90), k.color(200, 20, 20),
     ]);
     k.add([
       k.text("You should have kept\nyour eyes on the floor.", {
         size: 14, font: "monospace", align: "center",
       }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 - 10),
-      k.color(130, 130, 130),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 - 10), k.color(140, 140, 140),
     ]);
     k.add([
       k.text("[ click / ENTER to try again ]", { size: 13, font: "monospace" }),
-      k.anchor("center"), k.pos(VW / 2, VH / 2 + 100),
-      k.color(150, 150, 150),
+      k.anchor("center"), k.pos(VW / 2, VH / 2 + 100), k.color(160, 160, 160),
     ]);
-
     let p = 0;
-    k.onUpdate(() => { p += k.dt(); staticFx.draw(0.45 + Math.sin(p * 4) * 0.3); });
+    k.onUpdate(() => { p += k.dt(); staticFx.draw(0.5 + Math.sin(p * 4) * 0.35); });
     k.onMousePress(() => k.go("play"));
     k.onKeyPress("enter", () => k.go("play"));
   });
