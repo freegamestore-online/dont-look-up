@@ -11,7 +11,7 @@ export default function App() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const stop = startGame(canvas, (n) => {
+    const stop = startGame(canvas, (n: number) => {
       setScore(n);
       updateHighScore(n);
     });
@@ -21,11 +21,7 @@ export default function App() {
   return (
     <GameShell
       topbar={
-        <GameTopbar
-          title="Don't Look Up"
-          score={score}
-          highScore={highScore}
-        />
+        <GameTopbar title="Don't Look Up" score={score} highScore={highScore} />
       }
     >
       <canvas ref={canvasRef} className="w-full h-full block touch-none" />
