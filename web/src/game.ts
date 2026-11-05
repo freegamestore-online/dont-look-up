@@ -1,5 +1,5 @@
 import kaplay from "kaplay";
-import type { KAPLAYCtx } from "kaplay";
+import type { GameObj, KAPLAYCtx } from "kaplay";
 import {
   VW, VH,
   createAudioCtx, playNoise, playTone, playJumpscare, playPickup, playWin,
@@ -190,7 +190,7 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
 
     let playerStartX = TILE * 1.5, playerStartY = TILE * 1.5;
     let keyX = 0, keyY = 0, exitX = 0, exitY = 0;
-    const wallObjs: ReturnType<typeof k.add>[] = [];
+    const wallObjs: GameObj[] = [];
 
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
@@ -224,8 +224,8 @@ export function startGame(canvas: HTMLCanvasElement, onScore: (n: number) => voi
     }
 
     // ── Monster visuals ───────────────────────────────────────────────────
-    const monsterObjs: ReturnType<typeof k.add>[] = [];
-    const monsterGlowObjs: ReturnType<typeof k.add>[] = [];
+    const monsterObjs: GameObj[] = [];
+    const monsterGlowObjs: GameObj[] = [];
     for (const m of monsters) {
       monsterObjs.push(k.add([k.circle(22), k.color(50,0,0), k.anchor("center"), k.pos(m.x, m.y)]));
       monsterGlowObjs.push(k.add([k.circle(36), k.color(100,0,0), k.anchor("center"), k.pos(m.x, m.y), k.opacity(0)]));

@@ -21,7 +21,7 @@ export default function App() {
   return (
     <GameShell
       topbar={
-        <GameTopbar title="Don't Look Up" score={score} highScore={highScore} />
+        <GameTopbar title="Don't Look Up" score={score} stats={[{ label: "Best", value: highScore }]} />
       }
     >
       <canvas ref={canvasRef} className="w-full h-full block touch-none" />
