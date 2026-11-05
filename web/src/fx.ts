@@ -5,8 +5,29 @@ export const VW = 640;
 export const VH = 480;
 
 // ─── Web Audio ────────────────────────────────────────────────────────────────
+// Every sound routes through a per-context master gain that the platform
+// topbar Mute button drives via setMuted() (see SoundBridge in App.tsx).
+let muted = true;
+const masters = new Map<AudioContext, GainNode>();
+
+export function setMuted(m: boolean) {
+  muted = m;
+  for (const g of masters.values()) g.gain.value = m ? 0 : 1;
+}
+
+function master(ctx: AudioContext): AudioNode {
+  return masters.get(ctx) ?? ctx.destination;
+}
+
 export function createAudioCtx(): AudioContext | null {
-  try { return new AudioContext(); } catch { return null; }
+  try {
+    const ctx = new AudioContext();
+    const g = ctx.createGain();
+    g.gain.value = muted ? 0 : 1;
+    g.connect(ctx.destination);
+    masters.set(ctx, g);
+    return ctx;
+  } catch { return null; }
 }
 
 export function playNoise(ctx: AudioContext, duration: number, vol: number) {
@@ -18,7 +39,7 @@ export function playNoise(ctx: AudioContext, duration: number, vol: number) {
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(vol, ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
-  src.connect(gain); gain.connect(ctx.destination);
+  src.connect(gain); gain.connect(master(ctx));
   src.start();
 }
 
@@ -32,7 +53,7 @@ export function playTone(
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(vol, ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-  osc.connect(gain); gain.connect(ctx.destination);
+  osc.connect(gain); gain.connect(master(ctx));
   osc.start(); osc.stop(ctx.currentTime + dur);
 }
 
@@ -123,9 +144,9 @@ export function startAmbient(ctx: AudioContext): AmbientHandles {
   const g2 = ctx.createGain(); g2.gain.value = 0.05;
   const g3 = ctx.createGain(); g3.gain.value = 0.04;
 
-  osc1.connect(g1); g1.connect(ctx.destination);
-  osc2.connect(g2); g2.connect(ctx.destination);
-  osc3.connect(g3); g3.connect(ctx.destination);
+  osc1.connect(g1); g1.connect(master(ctx));
+  osc2.connect(g2); g2.connect(master(ctx));
+  osc3.connect(g3); g3.connect(master(ctx));
   osc1.start(); osc2.start(); osc3.start();
 
   let phase = 0;
